@@ -11,16 +11,12 @@ function App() {
     const [expenses, setExpenses] = useState([]);
     //total cost of expenses 
     const [total, setTotal] = useState(0);
-    
-  //recalculate total whenever expenses changes
-  useEffect(() => {
-    //reduce() goes through every item in the array and adds price values
-    //acc is accumulated total, curr is current object
-    //parseFloat(curr.price) converts string into a number
-    const sum = expenses.reduce((acc, curr) => acc + parseFloat(curr.price),0 );
-    //STORES TOTAL  
-    setTotal(sum);
-  }, [expenses]);
+
+    //varibles to update states when new data is entered
+    const[highest, setHighest] = useState(null);
+    const[lowest, setLowest] = useState(null);
+    const[trend,setTrend] = useState([]);
+    const[category,setCategory] = useState([]);
 
     //Sends a get request to the backend when the app starts
     useEffect(() => {
@@ -31,8 +27,70 @@ function App() {
       })
       .catch(err => console.error('Error loading expenses:', err));
     }, []);
-    
 
+
+  //recalculate total whenever expenses changes
+  useEffect(() => {
+    //reduce() goes through every item in the array and adds price values
+    //acc is accumulated total, curr is current object
+    const sum = expenses.reduce((acc, curr) => acc + parseFloat(curr.price),0 ); 
+    setTotal(sum);
+  }, [expenses]);
+
+  // High Low 
+  useEffect(() => {
+    const categoryTotals = {};
+
+    expenses.forEach(e => {
+      const category = e.item;
+      const amount = parseFloat(e.price);
+
+      categoryTotals[category] = (categoryTotals[category] || 0) + amount;
+    });
+
+    const categories = Object.entries(categoryTotals).map(
+      ([category, total]) => ({category, total})
+    );
+    let high = categories[0];
+    let low = categories[0];
+
+    categories.forEach(c => {
+      if(c.total > high.total) high = c;
+      if(c.total<low.total) low = c;
+    });
+    setHighest(high);
+    setLowest(low);
+  }, [expenses]);
+
+   //Trend 
+  useEffect(()=> {
+    fetch('/api/expenses/trend')
+    .then(res=>res.json())
+    .then(json => {
+      if(json.success){
+        setTrend(json.data);
+      }
+    })
+    .catch(e=> console.error("error with trend"))
+  }, []);
+
+   //Category
+  useEffect (()=> {
+    const totals={};
+
+    expenses.forEach(e =>{
+      const category = e.item;
+      const total = parseFloat(e.price);
+      totals[category] = (totals[category] || 0)+ total
+
+    });
+    const formatted = Object.entries(totals).map(
+      ([category, total]) => ({category, total})
+    );
+
+    setCategory(formatted);
+  }, [expenses]);
+  
   //creates an event, handlesubmit
   const handleSubmit = async (e) => {
     //prevents it from resetting
@@ -55,7 +113,7 @@ function App() {
         },
         body: JSON.stringify(newExpense)
       });
-      //parses JSON response from server
+      //parses data
       const result = await response.json();
 
       //if successful it appends a new expense to current listing
@@ -76,7 +134,7 @@ function App() {
 
   //function that takes an a ID of the expense you want to delete 
   const handleDelete = async (id) => {
-    //start a try catch block 
+
     try {
       //send a request to the backend and save the reponse in the variable to check
       const response = await fetch(`/api/expenses/${id}`, {  
@@ -86,7 +144,6 @@ function App() {
       const result = await response.json();
   
       if (response.ok) {
-        //if it worked then remove it from the screen 
         setExpenses(prev => prev.filter(exp => Number(exp.id) !== Number(id))); 
       } else {
         console.error("Error deleting expense:", result.message);
@@ -95,7 +152,6 @@ function App() {
       console.error("Error deleting expense:", error);
     }
   };
-  
 
   return(
  <>
@@ -107,13 +163,110 @@ function App() {
       
     </nav>
 
-     <form onSubmit = {handleSubmit} className = "">
+{/* Displaying highest and lowest*/}
+   
+    <div className ="flex justify-center gap-6 my-6 w-full">
+       <div className = "border w-1/5 text-center p-4">
+        <h3>Total</h3>
+        <p>${total.toFixed(2)}</p>
+      </div>
+
+        <div className = "border w-1/5 text-center p-4">
+        <h3>Highest Category</h3>
+        {highest ? (
+          <p>{highest.category} (${highest.total.toFixed(2)})</p>
+        ):(
+          <p>-</p>
+        )
+        }  
+      </div>
+          <div className = "border w-1/5 text-center p-4">
+        <h3>Lowest Category</h3>
+        {lowest ? (
+          <p>{lowest.category} (${lowest.total.toFixed(2)})</p>
+        ):(
+          <p>-</p>
+        )
+        }
+        
+      </div>
+
+    </div>
+    {/* End */}
+
+    {/* Displaying  trend */}
+   <div className ="flex flex-col items-center my-6 w-full border">
+    <div className="w-full">
+      <table className ="w-3/4 mx-auto">
+      <thead>
+        <tr>
+          <th className="border p-2 bg-black text-white">Date</th>
+           <th className="border p-2 bg-black text-white">Total Spent</th>
+            <th className="border p-2 bg-black text-white">Number of Expenses</th>
+        </tr>
+      </thead>
+     
+     <tbody>
+      {trend.map((t,index) =>(
+      <tr key={index}>
+        <td className="border p-2 text-center">
+          {new Date(t.period).toLocaleDateString()}
+        </td>
+       <td className="border p-2 text-center">
+        {t.total.toFixed(2)}
+       </td>
+       <td className="border p-2 text-center">
+        {t.count}
+       </td>
+      </tr>
+      ))}
+     </tbody>
+     
+</table>
+     
+     </div>
+</div>
+{/* End */}
+
+    {/* Displaying cost by category */}
+   <div className ="flex flex-col items-center my-6 w-full border">
+    <div className="w-full">
+      <table className ="w-3/4 mx-auto">
+      <thead>
+        <tr>
+          <th className="border p-2 bg-black text-white">Category</th>
+           <th className="border p-2 bg-black text-white">Total</th>
+        </tr>
+      </thead>
+     
+     <tbody>
+      {category.map((c,index) =>(
+      <tr key={index}>
+        <td className="border p-2 text-center">
+          {c.category}
+        </td>
+       <td className="border p-2 text-center">
+        {c.total.toFixed(2)}
+       </td>
+      </tr>
+      ))}
+     </tbody>
+     
+</table>
+     
+     </div>
+</div>
+{/* End */}
+
+{/* Form for data entry */}
+
+     <form onSubmit = {handleSubmit} className = "flex justify-center gap-6 my-6 w-full">
      <div className = "m-4 flex items-center space-x-4">
       <h1 className = "text-base text-bold" > Date</h1>
       <input type = "date" required value ={date} onChange ={(e) => setDate(e.target.value)}className = "border p-1 rounded"></input>
     </div>
     <div className = "m-4 flex items-center space-x-4">
-      <h1 className = "text-base" > Item </h1>
+      <h1 className = "text-base" > Category </h1>
       <input type = "text" required value = {item} onChange ={(e) => setItem(e.target.value)} className = "border p-1 rounded"></input>
     </div>
 
@@ -128,14 +281,9 @@ function App() {
 
      
      </form>
+     {/* End */}
 
-     <div className = "m-4 flex items-center " >
-      <h2 className="text-xl font-bold">Total Spent</h2>
-      <p className = "border rounded">${total.toFixed(2)}</p>
-     </div>
-
-     
-
+{/* Table for category, date, price */}
      <div className ="flex flex-col items-center my-4 w-full border">
      
       <div className = "w-full mt-10">
@@ -143,7 +291,7 @@ function App() {
       <thead>
       <tr className ="bg-grey-200">
   <th className = "border p-2 bg-black text-white">Date</th>
-  <th className = "border p-2  bg-black text-white">Item</th>
+  <th className = "border p-2  bg-black text-white">Category</th>
   <th className = "border p-2  bg-black text-white">Price</th>
   <th className = "border p-2   bg-black text-white">Remove</th>
   
@@ -152,7 +300,7 @@ function App() {
 <tbody>
 {expenses.map((exp) => (
   <tr key={exp.id}>
-    <td className="border p-2">{exp.date}</td>
+    <td className="border p-2">{new Date(exp.date).toLocaleDateString()}</td>
     <td className="border p-2">{exp.item}</td>
     <td className="border p-2">${parseFloat(exp.price).toFixed(2)}</td>
     <td className="border p-2">
@@ -170,7 +318,7 @@ function App() {
      </div>
 
       </div>
-  
+  {/* End */}
    </>
   ) 
    

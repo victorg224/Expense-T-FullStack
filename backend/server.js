@@ -9,9 +9,18 @@ import pool from "./config/db.js";
 
 dotenv.config();
 
+//creates express app instance 
 const app = express();
+
+//creates port that server will listen on
 const PORT = process.env.PORT || 3000;
 
+//Middleware
+app.use(express.json());
+app.use(helmet());
+app.use(morgan("dev")); 
+
+//Preflight ensures request can be made
 app.options('/api/expenses',cors({
     origin: "http://localhost:5173", 
     methods: ["GET", "POST", "DELETE"],
@@ -19,6 +28,7 @@ app.options('/api/expenses',cors({
     allowedHeaders: ["Content-Type"]
   }));
 
+  //Actual request made
   app.use('/api/expenses',cors({
     origin: "http://localhost:5173", 
     methods: ["GET", "POST", "DELETE"],
@@ -26,22 +36,11 @@ app.options('/api/expenses',cors({
     allowedHeaders: ["Content-Type"]
   }));
 
-  
-
-  app.use((req,res,next)=> {
-    console.log(`[${req.method}] ${req.url}`)
-    next();
-  });
-
-
-app.use(express.json());
-app.use(helmet());
-app.use(morgan("dev")); 
-
-  
 
 app.use("/api/expenses", expenseRoutes);
 
+
+//create table if one doesnt exist
 async function initDB() {
     try {
         await pool.query(`
@@ -53,19 +52,13 @@ async function initDB() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-       // await pool.query(
-       // `INSERT INTO expenses (item, price, date) VALUES ($1,$2,$3)`,
-       // ['Coffee',3.50,'2025-04-06']
-       // );
-
-
         console.log("Database initialized successfully");
     } catch (error) {
         console.error("Error initializing database:", error);
     }
 }
 
-
+//starts server after database is initilized
 initDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server is running on port ${PORT}`);
